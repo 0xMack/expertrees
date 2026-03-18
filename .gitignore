@@ -1,0 +1,35 @@
+# Build outputs
+dist
+.output
+.data
+.nuxt
+.nitro
+
+# Turbo
+.turbo
+.cache
+
+# Node
+node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Test coverage
+coverage
+
+# TypeScript
+*.tsbuildinfo
