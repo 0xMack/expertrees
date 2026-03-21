@@ -14,11 +14,19 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["knowledge-graph", "skill-tree", "react", "visualization"],
+  "keywords": [
+    "knowledge-graph",
+    "skill-tree",
+    "react",
+    "visualization"
+  ],
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
