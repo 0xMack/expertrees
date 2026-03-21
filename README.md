@@ -1,6 +1,6 @@
 # expertrees
 
-A framework-agnostic TypeScript library for building and visualizing hierarchical knowledge graphs — navigable like a star map or a perk tree from a video game.
+A framework-agnostic TypeScript library for building and visualizing hierarchical knowledge graphs — navigable like a star map.
 
 Nodes represent skills or knowledge domains. Nodes with children render as glowing **bubbles**; leaf nodes render as **twinkling stars**. Click or zoom into a bubble to burst it and explore the sub-graph inside. Evidence — links, images, text, files — can be attached to any node.
 
