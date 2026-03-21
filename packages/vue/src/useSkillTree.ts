@@ -9,7 +9,7 @@ import {
   type LodThreshold,
   type SkillTreeEvents,
   type NavigationFrame,
-} from '@skilltree/core'
+} from '@expertrees/core'
 
 export interface UseSkillTreeOptions {
   data: SkillGraph

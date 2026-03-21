@@ -1,7 +1,7 @@
 {
-  "name": "@skilltree/vue",
+  "name": "@expertrees/vue",
   "version": "0.1.0",
-  "description": "Vue 3 component and composables for @skilltree/core",
+  "description": "Vue 3 component and composable for @expertrees/core",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,6 +15,10 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["knowledge-graph", "skill-tree", "vue", "vue3", "visualization"],
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
@@ -24,7 +28,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@skilltree/core": "*"
+    "@expertrees/core": "*"
   },
   "peerDependencies": {
     "vue": "^3.4.0"

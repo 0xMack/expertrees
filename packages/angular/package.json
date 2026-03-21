@@ -1,0 +1,29 @@
+{
+  "name": "@expertrees/angular",
+  "version": "0.1.0",
+  "description": "Angular component for @expertrees/core",
+  "license": "MIT",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["knowledge-graph", "skill-tree", "angular", "visualization"],
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@angular/common": ">=17.0.0",
+    "@angular/core": ">=17.0.0",
+    "@expertrees/core": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@angular/common": "^17.0.0",
+    "@angular/compiler": "^17.0.0",
+    "@angular/compiler-cli": "^17.0.0",
+    "@angular/core": "^17.0.0",
+    "@expertrees/core": "*",
+    "ng-packagr": "^17.0.0",
+    "typescript": "^5.2.0"
+  }
+}

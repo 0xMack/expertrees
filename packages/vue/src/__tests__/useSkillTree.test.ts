@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h, reactive, nextTick } from 'vue'
 import { useSkillTree } from '../useSkillTree.js'
-import type { SkillGraph, SkillTreeEvents } from '@skilltree/core'
+import type { SkillGraph, SkillTreeEvents } from '@expertrees/core'
 
 // ─── Engine mock ──────────────────────────────────────────────────────────────
 // Capture the `on` handlers passed to each SkillTreeEngine constructor so tests
@@ -10,22 +10,25 @@ import type { SkillGraph, SkillTreeEvents } from '@skilltree/core'
 
 let capturedHandlers: Partial<SkillTreeEvents> = {}
 
-vi.mock('@skilltree/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@skilltree/core')>()
+vi.mock('@expertrees/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@expertrees/core')>()
   return {
     ...actual,
     SkillTreeEngine: vi.fn().mockImplementation((opts: { on?: Partial<SkillTreeEvents> }) => {
       capturedHandlers = opts.on ?? {}
       return {
-        dispose:        vi.fn(),
-        setNodeState:   vi.fn(),
-        addEvidence:    vi.fn(),
-        removeEvidence: vi.fn(),
-        updateTheme:    vi.fn(),
-        zoomIn:         vi.fn(),
-        zoomOut:        vi.fn(),
-        goBack:         vi.fn(),
-        getGraph:       vi.fn().mockReturnValue({ id: 'g', label: 'G', nodes: [], edges: [] }),
+        dispose:             vi.fn(),
+        setNodeState:        vi.fn(),
+        addEvidence:         vi.fn(),
+        removeEvidence:      vi.fn(),
+        updateTheme:         vi.fn(),
+        zoomIn:              vi.fn(),
+        zoomOut:             vi.fn(),
+        goBack:              vi.fn(),
+        enterContext:        vi.fn(),
+        jumpToNavDepth:      vi.fn(),
+        getGraph:            vi.fn().mockReturnValue({ id: 'g', label: 'G', nodes: [], edges: [] }),
+        getNavigationStack:  vi.fn().mockReturnValue([{ nodeId: null, label: 'G' }]),
       }
     }),
   }
@@ -83,7 +86,7 @@ describe('useSkillTree', () => {
       const { exposed } = await mountWithComposable({ data: testGraph })
       for (const method of ['setNodeState', 'addEvidence', 'removeEvidence',
                             'updateTheme', 'zoomIn', 'zoomOut', 'goBack', 'getGraph']) {
-        expect(typeof (exposed as Record<string, unknown>)[method]).toBe('function')
+        expect(typeof (exposed as unknown as Record<string, unknown>)[method]).toBe('function')
       }
     })
 
@@ -200,7 +203,7 @@ describe('useSkillTree', () => {
 
   describe('data reactivity', () => {
     it('reinitialises the engine when the data reference changes', async () => {
-      const { SkillTreeEngine } = await import('@skilltree/core')
+      const { SkillTreeEngine } = await import('@expertrees/core')
       const EngineMock = vi.mocked(SkillTreeEngine)
 
       const options = reactive<Parameters<typeof useSkillTree>[0]>({ data: testGraph })
@@ -216,7 +219,7 @@ describe('useSkillTree', () => {
     })
 
     it('disposes the old engine before creating the new one', async () => {
-      const { SkillTreeEngine } = await import('@skilltree/core')
+      const { SkillTreeEngine } = await import('@expertrees/core')
       const EngineMock = vi.mocked(SkillTreeEngine)
 
       const options = reactive<Parameters<typeof useSkillTree>[0]>({ data: testGraph })

@@ -8,7 +8,7 @@ import type {
   LodThreshold,
   SkillTreeEvents,
   NavigationFrame,
-} from '@skilltree/core'
+} from '@expertrees/core'
 import { useSkillTree } from './useSkillTree.js'
 
 const props = defineProps<{
