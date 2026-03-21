@@ -1,6 +1,6 @@
 {
   "name": "@expertrees/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React hook and component for @expertrees/core",
   "license": "MIT",
   "type": "module",

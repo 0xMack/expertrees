@@ -1,6 +1,6 @@
 {
   "name": "@expertrees/angular",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Angular component for @expertrees/core",
   "license": "MIT",
   "files": [
@@ -25,7 +25,7 @@
   "peerDependencies": {
     "@angular/common": ">=17.0.0",
     "@angular/core": ">=17.0.0",
-    "@expertrees/core": ">=0.1.0"
+    "@expertrees/core": ">=0.1.1"
   },
   "devDependencies": {
     "@angular/common": "^17.0.0",
