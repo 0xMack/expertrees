@@ -26,6 +26,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       - run: npm ci
 
@@ -35,7 +36,7 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          publish: npm run release
+          publish: unset NODE_AUTH_TOKEN && npm run release
           title: "chore: version packages"
           commit: "chore: version packages"
           createGithubReleases: true
