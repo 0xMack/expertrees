@@ -35,13 +35,12 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          # bash -c so that the env var assignment is handled by a shell, not exec'd directly
-          # NPM_CONFIG_USERCONFIG=/dev/null prevents any pre-configured _authToken
-          # from interfering with npm's native OIDC trusted publishing exchange
-          publish: bash -c 'NPM_CONFIG_USERCONFIG=/dev/null npm run release'
+          publish: npm run release
           title: "chore: version packages"
           commit: "chore: version packages"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+          # Bypass any pre-configured _authToken so npm uses native OIDC exchange
+          NPM_CONFIG_USERCONFIG: /dev/null
