@@ -1,6 +1,6 @@
 {
   "name": "@expertrees/vue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Vue 3 component and composable for @expertrees/core",
   "license": "MIT",
   "type": "module",
