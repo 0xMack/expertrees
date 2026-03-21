@@ -33,6 +33,13 @@ jobs:
       - name: Build all packages
         run: npm run build
 
+      - name: Debug OIDC token claims
+        run: |
+          TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://registry.npmjs.org" | jq -r .value)
+          echo "=== OIDC token claims ==="
+          echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
+
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
