@@ -12,6 +12,7 @@ export type InteractionEvent =
   | { type: 'node:click'; nodeId: string }
   | { type: 'node:hover'; nodeId: string }
   | { type: 'node:blur'; nodeId: string }
+  | { type: 'canvas:click' }
   | { type: 'zoom:change'; zoom: number }
   | { type: 'pan:change'; pan: Position }
 
@@ -26,10 +27,20 @@ export class InteractionController {
   private _nodeSize = 8
   private _dpr: number
 
-  // Smooth zoom
+  // Smooth zoom (lerp)
   private _targetZoom: number = 1
   private _zoomAnchor: Position | null = null
   private readonly _zoomLerpAlpha = 0.14
+
+  // Timed zoom — takes priority over lerp when active
+  private _timedZoom: {
+    startZoom: number
+    target: number
+    anchor: Position | null
+    startTime: number
+    duration: number
+    easing: 'in' | 'out'
+  } | null = null
 
   // Multi-touch tracking
   private _activePointers: Map<number, Position> = new Map()
@@ -70,10 +81,33 @@ export class InteractionController {
   get targetZoom(): number { return this._targetZoom }
   get zoomAnchor(): Position | null { return this._zoomAnchor }
 
-  setTargetZoom(value: number): void { this._targetZoom = value }
+  setTargetZoom(value: number, anchor?: Position): void {
+    this._timedZoom  = null
+    this._targetZoom = value
+    if (anchor !== undefined) this._zoomAnchor = anchor
+  }
+
+  /**
+   * Animate zoom to `target` over `duration` ms.
+   * `easing: 'in'`  — cubic ease-in  (slow start, accelerates toward target).
+   * `easing: 'out'` — cubic ease-out (fast start, decelerates toward target).
+   */
+  startTimedZoom(target: number, duration: number, anchor?: Position, easing: 'in' | 'out' = 'in'): void {
+    this._timedZoom = {
+      startZoom: this._state.zoom,
+      target,
+      anchor: anchor ?? null,
+      startTime: performance.now(),
+      duration,
+      easing,
+    }
+    this._targetZoom = target
+    this._zoomAnchor = anchor ?? null
+  }
 
   /** Instantly snap zoom and pan to a new center — used on navigation transitions. */
   resetToCenter(zoom: number, cx: number, cy: number): void {
+    this._timedZoom  = null
     this._targetZoom = zoom
     this._state.zoom = zoom
     this._state.pan  = { x: cx, y: cy }
@@ -92,18 +126,35 @@ export class InteractionController {
   }
 
   /**
-   * Lerp current zoom toward target. Called every RAF frame by the engine.
+   * Advance zoom animation one frame. Called every RAF frame by the engine.
    * Returns true while the animation is still in progress.
    */
   tick(): boolean {
-    const dz = this._targetZoom - this._state.zoom
-    if (Math.abs(dz) < 0.0001) {
-      this._zoomAnchor = null
-      return false
-    }
-
     const prevZoom = this._state.zoom
-    this._state.zoom += dz * this._zoomLerpAlpha
+
+    if (this._timedZoom) {
+      const { startZoom, target, anchor, startTime, duration, easing } = this._timedZoom
+      const t = Math.min(1, (performance.now() - startTime) / duration)
+      // ease-in: t³ — slow start, accelerates toward target
+      // ease-out: 1-(1-t)³ — fast start, decelerates toward target
+      const eased = easing === 'out' ? 1 - Math.pow(1 - t, 3) : t * t * t
+      this._state.zoom = startZoom + (target - startZoom) * eased
+
+      if (t >= 1) {
+        this._timedZoom  = null
+        this._zoomAnchor = null
+      } else {
+        this._zoomAnchor = anchor
+      }
+    } else {
+      // Fallback: standard lerp toward target
+      const dz = this._targetZoom - this._state.zoom
+      if (Math.abs(dz) < 0.0001) {
+        this._zoomAnchor = null
+        return false
+      }
+      this._state.zoom += dz * this._zoomLerpAlpha
+    }
 
     // Keep the zoom anchor point fixed in world space
     if (this._zoomAnchor) {
@@ -255,6 +306,9 @@ export class InteractionController {
       if (hit) {
         this._state.selectedNodeId = hit === this._state.selectedNodeId ? null : hit
         this._emit({ type: 'node:click', nodeId: hit })
+      } else {
+        this._state.selectedNodeId = null
+        this._emit({ type: 'canvas:click' })
       }
     }
   }

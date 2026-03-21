@@ -16,6 +16,7 @@ export interface UseSkillTreeOptions {
   theme?: ThemeInput
   lod?: LodThreshold[]
   on?: Partial<SkillTreeEvents>
+  initialContextNodeId?: string
 }
 
 export interface UseSkillTreeReturn {
@@ -47,6 +48,8 @@ export interface UseSkillTreeReturn {
   zoomOut: () => void
   /** Get serialized graph state */
   getGraph: () => SkillGraph
+  /** Programmatically enter a bubble node's context (triggers burst + zoom) */
+  enterContext: (nodeId: string) => void
 }
 
 export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
@@ -70,6 +73,7 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
       data: options.data,
       ...(options.theme !== undefined && { theme: options.theme }),
       ...(options.lod !== undefined && { lod: options.lod }),
+      ...(options.initialContextNodeId !== undefined && { initialContextNodeId: options.initialContextNodeId }),
       on: {
         ...options.on,
         'node:hover': (node) => {
@@ -83,6 +87,10 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
         'node:click': (node) => {
           selectedNode.value = selectedNode.value?.id === node.id ? null : node
           options.on?.['node:click']?.(node)
+        },
+        'canvas:click': () => {
+          selectedNode.value = null
+          options.on?.['canvas:click']?.()
         },
         'zoom:change': (z) => {
           zoom.value = z
@@ -103,6 +111,9 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
         },
       },
     })
+
+    // Sync stack to reflect any silent initial context (e.g. initialContextNodeId)
+    navigationStack.value = engine.value.getNavigationStack()
   })
 
   onUnmounted(() => {
@@ -125,6 +136,7 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
   const zoomOut = () => engine.value?.zoomOut()
   const goBack = () => engine.value?.goBack()
   const getGraph = () => engine.value?.getGraph() ?? options.data
+  const enterContext = (nodeId: string) => engine.value?.enterContext(nodeId)
 
   return {
     canvasRef,
@@ -141,5 +153,6 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
     zoomIn,
     zoomOut,
     getGraph,
+    enterContext,
   }
 }

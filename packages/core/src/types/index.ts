@@ -53,6 +53,7 @@ export interface Evidence {
   id: string
   type: EvidenceType
   label: string
+  url?: string
   description?: string
   date?: string
   tags?: string[]
@@ -106,6 +107,7 @@ export interface SkillTreeEvents {
   'node:click': (node: SkillNode) => void
   'node:hover': (node: SkillNode) => void
   'node:blur': (node: SkillNode) => void
+  'canvas:click': () => void
   'zoom:change': (zoom: number) => void
   'context:enter': (node: SkillNode, stack: readonly NavigationFrame[]) => void
   'context:exit': (frame: NavigationFrame, stack: readonly NavigationFrame[]) => void

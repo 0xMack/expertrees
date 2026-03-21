@@ -28,6 +28,8 @@ export interface SkillTreeEngineOptions {
   theme?: ThemeInput
   lod?: LodThreshold[]
   on?: Partial<SkillTreeEvents>
+  /** Silently start inside this bubble node's context — no burst or fade animation */
+  initialContextNodeId?: string
 }
 
 export class SkillTreeEngine {
@@ -41,6 +43,8 @@ export class SkillTreeEngine {
   private _internalStates: Map<string, InternalNodeState> = new Map()
   private _eventHandlers: Partial<SkillTreeEvents>
   private _rafId: number | null = null
+  private _pendingEnter: ReturnType<typeof setTimeout> | null = null
+  private _pendingExit:  ReturnType<typeof setTimeout> | null = null
   private _unsubscribers: Array<() => void> = []
   private _resizeObserver: ResizeObserver
 
@@ -66,6 +70,13 @@ export class SkillTreeEngine {
     this._layout = new ForceLayout()
     this._renderer = new CanvasRenderer(canvas, theme ?? data.theme)
     this._interaction = new InteractionController(canvas)
+
+    if (options.initialContextNodeId) {
+      const initNode = this._model.getNode(options.initialContextNodeId)
+      if (initNode && this._isBubble(initNode)) {
+        this._nav.push({ nodeId: initNode.id, label: initNode.label })
+      }
+    }
 
     this._rebuildVisibleCache()
     this._wireEvents()
@@ -108,7 +119,61 @@ export class SkillTreeEngine {
   }
 
   goBack(): void {
-    if (this._nav.canGoBack) this._exitContext()
+    if (this._nav.canGoBack) this._exitWithAnimation()
+  }
+
+  private _exitWithAnimation(): void {
+    if (!this._nav.canGoBack) return
+
+    // Cancel any pending enter transition
+    if (this._pendingEnter !== null) {
+      clearTimeout(this._pendingEnter)
+      this._pendingEnter = null
+    }
+
+    const canvas = this._renderer.canvas
+    const rect = canvas.getBoundingClientRect()
+    const center = { x: rect.width / 2, y: rect.height / 2 }
+    const duration = 480
+
+    // Ease-out: camera pulls back fast, then settles
+    this._interaction.startTimedZoom(0.45, duration, undefined, 'out')
+
+    this._pendingExit = setTimeout(() => {
+      this._pendingExit = null
+      this._renderer.triggerImplode(center)
+      this._exitContext()
+    }, duration)
+  }
+
+  enterContext(nodeId: string): void {
+    const node = this._model.getNode(nodeId)
+    if (!node || !this._isBubble(node)) return
+
+    // Cancel any previous pending transition
+    if (this._pendingEnter !== null) {
+      clearTimeout(this._pendingEnter)
+      this._pendingEnter = null
+    }
+
+    const canvas = this._renderer.canvas
+    const rect = canvas.getBoundingClientRect()
+    const burstPos = { x: rect.width / 2, y: rect.height / 2 }
+
+    // Cubic ease-in zoom toward the node, then transition exactly when it peaks
+    const nodePos = this._positions.get(nodeId)
+    const anchor = nodePos ? (() => {
+      const { zoom, pan } = this._interaction.state
+      return { x: nodePos.x * zoom + pan.x, y: nodePos.y * zoom + pan.y }
+    })() : undefined
+
+    const duration = 480
+    this._interaction.startTimedZoom(2.5, duration, anchor)
+
+    this._pendingEnter = setTimeout(() => {
+      this._pendingEnter = null
+      this._enterContext(node, burstPos)
+    }, duration)
   }
 
   getGraph(): SkillGraph { return this._model.toJSON() }
@@ -117,6 +182,8 @@ export class SkillTreeEngine {
 
   dispose(): void {
     if (this._rafId !== null) cancelAnimationFrame(this._rafId)
+    if (this._pendingEnter !== null) clearTimeout(this._pendingEnter)
+    if (this._pendingExit  !== null) clearTimeout(this._pendingExit)
     this._resizeObserver.disconnect()
     this._layout.stop()
     this._renderer.dispose()
@@ -261,24 +328,20 @@ export class SkillTreeEngine {
             if (node) this._eventHandlers['node:blur']?.(node)
             break
           }
+          case 'canvas:click': {
+            // Clear any selected node
+            for (const [id, s] of this._internalStates) {
+              if (s === 'selected') this._internalStates.set(id, 'idle')
+            }
+            this._eventHandlers['canvas:click']?.()
+            break
+          }
+
           case 'node:click': {
             const node = this._model.getNode(event.nodeId)
             if (!node) break
 
-            // Clicking a bubble enters its context
-            if (this._isBubble(node)) {
-              const pos = this._positions.get(node.id)
-              if (pos) {
-                const { pan, zoom } = this._interaction.state
-                this._enterContext(node, {
-                  x: pos.x * zoom + pan.x,
-                  y: pos.y * zoom + pan.y,
-                })
-              }
-              break
-            }
-
-            // Clicking a leaf node toggles selection
+            // Toggle selection internal state for all nodes
             const prev = this._internalStates.get(event.nodeId)
             const isSelected = prev === 'selected'
             if (isSelected) {

@@ -56,9 +56,13 @@ export class CanvasRenderer {
   private _dpr: number
   private _bgStars: BgStar[]
 
-  // Burst animation state
+  // Burst animation state (entry)
   private _burst: { startTime: number; center: Position; color: string } | null = null
   private readonly _burstDuration = 450
+
+  // Implode animation state (exit)
+  private _implode: { startTime: number; center: Position } | null = null
+  private readonly _implodeDuration = 420
 
   constructor(canvas: HTMLCanvasElement, theme?: ThemeInput) {
     this._canvas = canvas
@@ -89,6 +93,10 @@ export class CanvasRenderer {
 
   triggerBurst(centerCanvas: Position, color: string): void {
     this._burst = { startTime: performance.now(), center: centerCanvas, color }
+  }
+
+  triggerImplode(centerCanvas: Position): void {
+    this._implode = { startTime: performance.now(), center: centerCanvas }
   }
 
   render(nodes: SkillNode[], edges: SkillEdge[], state: RenderState): void {
@@ -160,8 +168,9 @@ export class CanvasRenderer {
     ctx.restore() // undo world transform
     ctx.restore() // undo DPR scale
 
-    // Burst overlay — physical pixels, screen space
+    // Overlays — physical pixels, screen space
     this._renderBurst()
+    this._renderImplode()
   }
 
   // ─── Background stars ─────────────────────────────────────────────────────
@@ -427,6 +436,38 @@ export class CanvasRenderer {
       r, 0, Math.PI * 2,
     )
     ctx.fill()
+    ctx.restore()
+  }
+
+  // ─── Implode animation ────────────────────────────────────────────────────
+
+  private _renderImplode(): void {
+    if (!this._implode) return
+    const ctx = this._ctx
+    const elapsed = performance.now() - this._implode.startTime
+    const t = elapsed / this._implodeDuration
+    if (t >= 1) { this._implode = null; return }
+
+    // Cubic ease-in: ring starts at full radius and slowly at first,
+    // then accelerates sharply as it collapses to center
+    const eased     = t * t * t
+    const maxR      = Math.hypot(this._canvas.width, this._canvas.height)
+    const r         = (1 - eased) * maxR
+    const alpha     = (1 - t) * 0.55
+    const lineWidth = (1 - eased) * 40 * this._dpr
+
+    const cx = this._implode.center.x * this._dpr
+    const cy = this._implode.center.y * this._dpr
+
+    ctx.save()
+    ctx.globalAlpha  = alpha
+    ctx.strokeStyle  = '#9b5de5'
+    ctx.lineWidth    = lineWidth
+    ctx.shadowColor  = '#9b5de5'
+    ctx.shadowBlur   = 30 * this._dpr
+    ctx.beginPath()
+    ctx.arc(cx, cy, Math.max(0, r), 0, Math.PI * 2)
+    ctx.stroke()
     ctx.restore()
   }
 
