@@ -26,25 +26,21 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - run: npm ci
 
       - name: Build all packages
         run: npm run build
 
-      - name: Test npm OIDC auth
-        run: |
-          echo "--- npm publish --dry-run (core) ---"
-          cd packages/core && npm publish --provenance --access public --dry-run
-
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          publish: env -u NODE_AUTH_TOKEN npm run release
+          # NPM_CONFIG_USERCONFIG=/dev/null prevents any pre-configured _authToken
+          # from interfering with npm's native OIDC trusted publishing exchange
+          publish: NPM_CONFIG_USERCONFIG=/dev/null npm run release
           title: "chore: version packages"
           commit: "chore: version packages"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
+          NPM_CONFIG_PROVENANCE: "true"
