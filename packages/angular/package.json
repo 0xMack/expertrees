@@ -7,6 +7,11 @@
     "dist",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xMack/expertrees.git",
+    "directory": "packages/angular"
+  },
   "publishConfig": {
     "access": "public"
   },
