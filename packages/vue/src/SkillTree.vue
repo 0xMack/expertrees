@@ -47,6 +47,7 @@ const {
   zoomOut,
   getGraph,
   enterContext,
+  jumpToNavDepth,
 } = useSkillTree({
   data: props.data,
   ...(props.theme !== undefined && { theme: props.theme }),
@@ -74,6 +75,7 @@ defineExpose({
   zoomOut,
   goBack,
   enterContext,
+  jumpToNavDepth,
   getGraph,
   hoveredNode,
   selectedNode,

@@ -50,6 +50,8 @@ export interface UseSkillTreeReturn {
   getGraph: () => SkillGraph
   /** Programmatically enter a bubble node's context (triggers burst + zoom) */
   enterContext: (nodeId: string) => void
+  /** Atomically jump to a specific nav stack depth (single animation, no race conditions) */
+  jumpToNavDepth: (targetLength: number) => void
 }
 
 export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
@@ -137,6 +139,7 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
   const goBack = () => engine.value?.goBack()
   const getGraph = () => engine.value?.getGraph() ?? options.data
   const enterContext = (nodeId: string) => engine.value?.enterContext(nodeId)
+  const jumpToNavDepth = (targetLength: number) => engine.value?.jumpToNavDepth(targetLength)
 
   return {
     canvasRef,
@@ -154,5 +157,6 @@ export function useSkillTree(options: UseSkillTreeOptions): UseSkillTreeReturn {
     zoomOut,
     getGraph,
     enterContext,
+    jumpToNavDepth,
   }
 }

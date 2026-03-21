@@ -122,6 +122,45 @@ export class SkillTreeEngine {
     if (this._nav.canGoBack) this._exitWithAnimation()
   }
 
+  /**
+   * Atomically jump to a specific nav stack depth, firing a single animation.
+   * `targetLength` is the desired `stack.length` after the jump.
+   * Silently pops intermediate frames; plays one implode + fade transition.
+   */
+  jumpToNavDepth(targetLength: number): void {
+    if (this._nav.stack.length <= targetLength) return
+
+    // Cancel any in-flight transitions
+    if (this._pendingEnter !== null) { clearTimeout(this._pendingEnter); this._pendingEnter = null }
+    if (this._pendingExit  !== null) { clearTimeout(this._pendingExit);  this._pendingExit  = null }
+
+    // Silently pop all excess frames; capture the last one for the event
+    let lastPopped: NavigationFrame | undefined
+    while (this._nav.stack.length > targetLength && this._nav.canGoBack) {
+      lastPopped = this._nav.pop()
+    }
+    if (!lastPopped) return
+
+    const canvas = this._renderer.canvas
+    const rect   = canvas.getBoundingClientRect()
+    const center = { x: rect.width / 2, y: rect.height / 2 }
+
+    this._navCooldownUntil = Date.now() + NAV_COOLDOWN_MS
+    this._rebuildVisibleCache()
+    this._renderer.triggerImplode(center)
+    this._interaction.resetToCenter(1.0, center.x, center.y)
+    this._lod.setZoom(1.0)
+
+    for (const n of this._visibleNodes) {
+      this._positions.set(n.id, { x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80 })
+    }
+
+    this._contextFadeAlpha = 0
+    this._contextFadeStart = performance.now()
+    this._runLayout()
+    this._eventHandlers['context:exit']?.(lastPopped, this._nav.stack)
+  }
+
   private _exitWithAnimation(): void {
     if (!this._nav.canGoBack) return
 
