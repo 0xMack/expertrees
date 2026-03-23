@@ -60,6 +60,9 @@ export class SkillTreeEngine {
   // Navigation cooldown
   private _navCooldownUntil = 0
 
+  // True once we've run layout with valid (non-zero) canvas dimensions
+  private _hasValidDimensions = false
+
   constructor(options: SkillTreeEngineOptions) {
     const { canvas, data, theme, lod, on = {} } = options
 
@@ -80,11 +83,21 @@ export class SkillTreeEngine {
 
     this._rebuildVisibleCache()
     this._wireEvents()
+
+    const initRect = canvas.getBoundingClientRect()
+    this._hasValidDimensions = initRect.width > 0 && initRect.height > 0
     this._runLayout()
     this._startRenderLoop()
 
     this._resizeObserver = new ResizeObserver(() => {
       this._renderer.resize()
+      const rect = this._renderer.canvas.getBoundingClientRect()
+      if (!this._hasValidDimensions && rect.width > 0 && rect.height > 0) {
+        this._hasValidDimensions = true
+        const z = this._initialZoom()
+        this._interaction.resetToCenter(z, rect.width / 2, rect.height / 2)
+        this._lod.setZoom(z)
+      }
       this._runLayout()
     })
     this._resizeObserver.observe(canvas)
@@ -249,6 +262,15 @@ export class SkillTreeEngine {
     return !!(node.childIds && node.childIds.length > 0)
   }
 
+  /**
+   * Initial zoom for the current context, scaled down for larger groups.
+   * Starts at 1.0 for ≤3 nodes and reduces by 0.05 per extra node, floor 0.45.
+   */
+  private _initialZoom(): number {
+    const n = this._visibleNodes.length
+    return Math.max(0.45, 1.0 - Math.max(0, n - 3) * 0.05)
+  }
+
   private _enterContext(node: SkillNode, burstCanvasPos: Position): void {
     this._nav.push({ nodeId: node.id, label: node.label })
     this._navCooldownUntil = Date.now() + NAV_COOLDOWN_MS
@@ -259,8 +281,9 @@ export class SkillTreeEngine {
     // Reset zoom/pan to center
     const canvas = this._renderer.canvas
     const rect = canvas.getBoundingClientRect()
-    this._interaction.resetToCenter(1.0, rect.width / 2, rect.height / 2)
-    this._lod.setZoom(1.0)
+    const enterZoom = this._initialZoom()
+    this._interaction.resetToCenter(enterZoom, rect.width / 2, rect.height / 2)
+    this._lod.setZoom(enterZoom)
 
     // Seed visible nodes near world origin
     for (const n of this._visibleNodes) {
@@ -285,8 +308,9 @@ export class SkillTreeEngine {
 
     const canvas = this._renderer.canvas
     const rect = canvas.getBoundingClientRect()
-    this._interaction.resetToCenter(1.0, rect.width / 2, rect.height / 2)
-    this._lod.setZoom(1.0)
+    const exitZoom = this._initialZoom()
+    this._interaction.resetToCenter(exitZoom, rect.width / 2, rect.height / 2)
+    this._lod.setZoom(exitZoom)
 
     for (const n of this._visibleNodes) {
       this._positions.set(n.id, {
@@ -355,7 +379,9 @@ export class SkillTreeEngine {
           case 'pan:change':
             break
           case 'node:hover': {
-            this._internalStates.set(event.nodeId, 'hovered')
+            if (this._internalStates.get(event.nodeId) !== 'selected') {
+              this._internalStates.set(event.nodeId, 'hovered')
+            }
             const node = this._model.getNode(event.nodeId)
             if (node) this._eventHandlers['node:hover']?.(node)
             break

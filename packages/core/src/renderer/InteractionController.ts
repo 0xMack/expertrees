@@ -70,6 +70,8 @@ export class InteractionController {
     this._onPointerCancel = this._handlePointerCancel.bind(this)
     this._onWheel         = this._handleWheel.bind(this)
 
+    canvas.style.touchAction = 'none'
+
     canvas.addEventListener('pointerdown',   this._onPointerDown)
     canvas.addEventListener('pointermove',   this._onPointerMove)
     canvas.addEventListener('pointerup',     this._onPointerUp)

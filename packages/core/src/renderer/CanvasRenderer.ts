@@ -49,6 +49,38 @@ function hashPhase(id: string): number {
   return ((h % 1000) / 1000) * Math.PI * 2
 }
 
+/**
+ * Linear interpolation between two 6-digit hex colors (#rrggbb).
+ * t = 0 → from, t = 1 → to.
+ */
+function interpolateColor(from: string, to: string, t: number): string {
+  const r1 = parseInt(from.slice(1, 3), 16)
+  const g1 = parseInt(from.slice(3, 5), 16)
+  const b1 = parseInt(from.slice(5, 7), 16)
+  const r2 = parseInt(to.slice(1, 3), 16)
+  const g2 = parseInt(to.slice(3, 5), 16)
+  const b2 = parseInt(to.slice(5, 7), 16)
+  const r  = Math.round(r1 + (r2 - r1) * t)
+  const g  = Math.round(g1 + (g2 - g1) * t)
+  const b  = Math.round(b1 + (b2 - b1) * t)
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+}
+
+// ─── Proficiency arc animation ────────────────────────────────────────────────
+
+interface ProficiencyAnim {
+  appearing: boolean
+  startTime: number   // performance.now() ms
+}
+
+// Per-star delays (ms) for the 5 arc positions [leftmost … rightmost]
+// Appearing: left → right
+const STAR_APPEAR_DELAYS    = [0, 80, 160, 240, 320] as const
+// Disappearing: reverse → right → left
+const STAR_DISAPPEAR_DELAYS = [320, 240, 160, 80, 0] as const
+const STAR_ANIM_DURATION    = 200   // ms — duration of each individual star's scale
+const STAR_ANIM_TOTAL       = 520   // ms — full animation window (200 + 320 max delay)
+
 export class CanvasRenderer {
   private _canvas: HTMLCanvasElement
   private _ctx: CanvasRenderingContext2D
@@ -63,6 +95,9 @@ export class CanvasRenderer {
   // Implode animation state (exit)
   private _implode: { startTime: number; center: Position } | null = null
   private readonly _implodeDuration = 420
+
+  // Per-node proficiency arc animation state (detected from internalStates each frame)
+  private _proficiencyAnim = new Map<string, ProficiencyAnim>()
 
   constructor(canvas: HTMLCanvasElement, theme?: ThemeInput) {
     this._canvas = canvas
@@ -84,7 +119,8 @@ export class CanvasRenderer {
 
   /** Returns the resolved fill color for a node (used for burst color matching). */
   resolveNodeColor(node: SkillNode): string {
-    return this._resolveStyle(node).color
+    const style = this._resolveStyle(node)
+    return this._proficiencyNodeColor(node) ?? style.color
   }
 
   updateTheme(theme: ThemeInput): void {
@@ -204,6 +240,16 @@ export class CanvasRenderer {
     } else {
       this._drawStar(ctx, node, pos, internal, alpha, zoom, t)
     }
+
+    // Update proficiency arc animation state and draw if active
+    if (node.proficiency !== undefined) {
+      this._updateProficiencyAnim(node.id, internal)
+      const anim = this._proficiencyAnim.get(node.id)
+      if (anim) {
+        const elapsed = performance.now() - anim.startTime
+        this._drawProficiencyArc(ctx, node, pos, isBubble, alpha, zoom, elapsed, anim.appearing)
+      }
+    }
   }
 
   private _drawBubble(
@@ -216,6 +262,7 @@ export class CanvasRenderer {
     t: number,
   ): void {
     const style = this._resolveStyle(node)
+    const { color, glowColor } = this._effectiveColors(node, style, internal === 'selected')
     const phase = hashPhase(node.id)
     // Bubbles breathe very slowly; selected breathes a bit more
     const breatheAmp = internal === 'selected' ? 0.08 : 0.04
@@ -228,10 +275,10 @@ export class CanvasRenderer {
 
     // Outer halo — brighter when selected
     const haloOuter = isSelected ? r * 2.8 : r * 2.2
-    const haloStop0 = isSelected ? style.glowColor + '55' : style.glowColor + '30'
+    const haloStop0 = isSelected ? glowColor + '55' : glowColor + '30'
     const halo = ctx.createRadialGradient(pos.x, pos.y, r * 0.5, pos.x, pos.y, haloOuter)
     halo.addColorStop(0, haloStop0)
-    halo.addColorStop(1, style.glowColor + '00')
+    halo.addColorStop(1, glowColor + '00')
     ctx.fillStyle = halo
     ctx.beginPath()
     ctx.arc(pos.x, pos.y, haloOuter, 0, Math.PI * 2)
@@ -239,15 +286,15 @@ export class CanvasRenderer {
 
     // Inner fill
     const fill = ctx.createRadialGradient(pos.x, pos.y - r * 0.3, r * 0.1, pos.x, pos.y, r)
-    fill.addColorStop(0, style.color + (isSelected ? '70' : '50'))
-    fill.addColorStop(1, style.color + (isSelected ? '28' : '18'))
+    fill.addColorStop(0, color + (isSelected ? '70' : '50'))
+    fill.addColorStop(1, color + (isSelected ? '28' : '18'))
     ctx.fillStyle = fill
     ctx.beginPath()
     ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
     ctx.fill()
 
     // Border ring
-    ctx.strokeStyle  = isSelected ? style.glowColor : style.color
+    ctx.strokeStyle  = isSelected ? glowColor : color
     ctx.lineWidth    = (isSelected ? 2.5 : 1.5) / zoom
     ctx.globalAlpha  = style.opacity * alpha * (isSelected ? 1 : 0.7)
     ctx.beginPath()
@@ -257,7 +304,7 @@ export class CanvasRenderer {
     // Selected: spinning dashed outer ring
     if (isSelected) {
       const spinAngle = t * 0.7 + phase
-      ctx.strokeStyle  = style.glowColor
+      ctx.strokeStyle  = glowColor
       ctx.lineWidth    = 1.5 / zoom
       ctx.globalAlpha  = style.opacity * alpha * 0.85
       ctx.setLineDash([10 / zoom, 7 / zoom])
@@ -275,7 +322,7 @@ export class CanvasRenderer {
       const dotSize  = Math.max(1.5, r * 0.06)
       const orbit    = t * 0.15 + phase   // slow rotation
       ctx.globalAlpha = style.opacity * alpha * 0.6
-      ctx.fillStyle   = style.color + '90'
+      ctx.fillStyle   = color + '90'
       for (let i = 0; i < count; i++) {
         const angle = orbit + (i / count) * Math.PI * 2
         ctx.beginPath()
@@ -309,8 +356,8 @@ export class CanvasRenderer {
     t: number,
   ): void {
     const style = this._resolveStyle(node)
+    const { color, glowColor } = this._effectiveColors(node, style, internal === 'selected')
     const phase   = hashPhase(node.id)
-    // Two independent sine waves for a natural twinkle
     const isSelected = internal === 'selected'
     // Selected nodes twinkle more dramatically
     const twinkleAmp = isSelected ? 0.4 : 0.22
@@ -330,7 +377,7 @@ export class CanvasRenderer {
         const pulse   = ((t + offset) % ringPeriod) / ringPeriod  // 0→1
         const pulseR  = (size + glowPulse * 0.6) * (1 + pulse * 2.2)
         const ringAlpha = (1 - pulse) * 0.6
-        ctx.strokeStyle  = style.glowColor
+        ctx.strokeStyle  = glowColor
         ctx.lineWidth    = (1.5 / zoom) * (1 - pulse * 0.5)
         ctx.globalAlpha  = ringAlpha * style.opacity * alpha
         ctx.beginPath()
@@ -343,9 +390,9 @@ export class CanvasRenderer {
     // Glow
     if (glowPulse > 0) {
       const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowPulse + size)
-      grad.addColorStop(0, style.glowColor + (isSelected ? 'ff' : 'cc'))
-      grad.addColorStop(0.4, style.glowColor + (isSelected ? '88' : '55'))
-      grad.addColorStop(1,   style.glowColor + '00')
+      grad.addColorStop(0, glowColor + (isSelected ? 'ff' : 'cc'))
+      grad.addColorStop(0.4, glowColor + (isSelected ? '88' : '55'))
+      grad.addColorStop(1,   glowColor + '00')
       ctx.fillStyle = grad
       ctx.beginPath()
       ctx.arc(pos.x, pos.y, glowPulse + size, 0, Math.PI * 2)
@@ -353,7 +400,7 @@ export class CanvasRenderer {
     }
 
     // Body
-    ctx.fillStyle = isSelected ? style.glowColor : style.color
+    ctx.fillStyle = isSelected ? glowColor : color
     ctx.beginPath()
     this._drawShape(ctx, pos, size, style.shape)
     ctx.fill()
@@ -368,6 +415,135 @@ export class CanvasRenderer {
     }
 
     ctx.restore()
+  }
+
+  // ─── Proficiency arc ──────────────────────────────────────────────────────
+
+  /**
+   * Update proficiency animation state for a node based on its current
+   * internal state. Called once per frame per node (from _drawNode).
+   */
+  private _updateProficiencyAnim(nodeId: string, internal: InternalNodeState): void {
+    const now  = performance.now()
+    const anim = this._proficiencyAnim.get(nodeId)
+
+    if (internal === 'selected') {
+      // Start or resume an appearing animation
+      if (!anim || !anim.appearing) {
+        this._proficiencyAnim.set(nodeId, { appearing: true, startTime: now })
+      }
+    } else if (anim) {
+      if (anim.appearing) {
+        // Node was deselected — reverse: fan stars back to center
+        this._proficiencyAnim.set(nodeId, { appearing: false, startTime: now })
+      } else if (now - anim.startTime >= STAR_ANIM_TOTAL) {
+        // Disappear animation finished — clean up
+        this._proficiencyAnim.delete(nodeId)
+      }
+    }
+  }
+
+  /**
+   * Per-star animation scales (0→1 for appearing, 1→0 for disappearing).
+   * Stars are indexed [0…4] = [leftmost … rightmost] on the arc.
+   */
+  private _proficiencyStarScales(elapsed: number, appearing: boolean): [number, number, number, number, number] {
+    const delays = appearing ? STAR_APPEAR_DELAYS : STAR_DISAPPEAR_DELAYS
+    return (delays as readonly number[]).map(delay => {
+      const t = Math.max(0, Math.min(1, (elapsed - delay) / STAR_ANIM_DURATION))
+      const eased = 1 - Math.pow(1 - t, 3)
+      return appearing ? eased : 1 - eased
+    }) as [number, number, number, number, number]
+  }
+
+  private _drawProficiencyArc(
+    ctx: CanvasRenderingContext2D,
+    node: SkillNode,
+    pos: Position,
+    isBubble: boolean,
+    alpha: number,
+    zoom: number,
+    elapsed: number,
+    appearing: boolean,
+  ): void {
+    const style      = this._resolveStyle(node)
+    const proficiency = node.proficiency!
+
+    // Crown arc: 135° centered at the top of the node (-π/2 = 12 o'clock)
+    const arcSpan    = (135 * Math.PI) / 180
+    const arcStart   = -Math.PI / 2 - arcSpan / 2
+    const arcRadius  = isBubble ? BUBBLE_WORLD_RADIUS * 1.65 : style.size * 5
+    const starSize   = isBubble ? BUBBLE_WORLD_RADIUS * 0.18 : style.size * 1.1
+
+    const scales = this._proficiencyStarScales(elapsed, appearing)
+
+    for (let i = 0; i < 5; i++) {
+      const scale = scales[i]!
+      if (scale <= 0) continue
+
+      const angle = arcStart + (i / 4) * arcSpan
+      const sx    = pos.x + arcRadius * Math.cos(angle)
+      const sy    = pos.y + arcRadius * Math.sin(angle)
+
+      // Fill fraction: 1=full, 0.5=half, 0=empty
+      const threshold = i + 1
+      let fillFraction = 0
+      if (proficiency >= threshold) {
+        fillFraction = 1
+      } else if (proficiency > i) {
+        fillFraction = proficiency - i   // e.g. 0.5 for a half-star
+      }
+
+      ctx.save()
+      ctx.globalAlpha = alpha * scale
+      ctx.translate(sx, sy)
+      ctx.scale(scale, scale)
+      this._drawStarGlyph(ctx, starSize, fillFraction, zoom)
+      ctx.restore()
+    }
+  }
+
+  /**
+   * Draw a single proficiency star glyph centred at the current canvas origin.
+   * fillFraction: 0 = empty, 0.5 = half-filled, 1 = full.
+   */
+  private _drawStarGlyph(
+    ctx: CanvasRenderingContext2D,
+    size: number,
+    fillFraction: number,
+    zoom: number,
+  ): void {
+    const filledColor  = '#FFD700'
+    const outlineColor = 'rgba(255, 215, 0, 0.35)'
+
+    // Always draw the empty outline — gives context to partial fills
+    ctx.strokeStyle = outlineColor
+    ctx.lineWidth   = 1.5 / zoom
+    ctx.beginPath()
+    this._starPath(ctx, 0, 0, size)
+    ctx.stroke()
+
+    if (fillFraction <= 0) return
+
+    if (fillFraction >= 1) {
+      // Full fill
+      ctx.fillStyle = filledColor
+      ctx.beginPath()
+      this._starPath(ctx, 0, 0, size)
+      ctx.fill()
+    } else {
+      // Partial fill — clip to left portion of the star then fill.
+      // The dim outline on the unfilled right half makes the partial nature obvious.
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(-size - 1, -size - 1, size + 1, (size + 1) * 2)
+      ctx.clip()
+      ctx.fillStyle = filledColor
+      ctx.beginPath()
+      this._starPath(ctx, 0, 0, size)
+      ctx.fill()
+      ctx.restore()
+    }
   }
 
   // ─── Edge particles ───────────────────────────────────────────────────────
@@ -471,6 +647,53 @@ export class CanvasRenderer {
     ctx.restore()
   }
 
+  // ─── Color resolution ─────────────────────────────────────────────────────
+
+  /**
+   * Resolve effective fill and glow colors for a node, accounting for:
+   * 1. Selected state → selectedColor overrides everything
+   * 2. Proficiency rating → interpolated gradient or special colors
+   * 3. No proficiency / default → falls back to theme style colors
+   */
+  private _effectiveColors(
+    node: SkillNode,
+    style: NodeStyle,
+    isSelected: boolean,
+  ): { color: string; glowColor: string } {
+    if (isSelected) {
+      const c = this._selectedColor(node)
+      return { color: c, glowColor: c }
+    }
+    const profColor = this._proficiencyNodeColor(node)
+    if (profColor) return { color: profColor, glowColor: profColor }
+    return { color: style.color, glowColor: style.glowColor }
+  }
+
+  /**
+   * Selected color interpolated by proficiency: amber (low) → dark red (high).
+   * Nodes with no proficiency set always use selectedColor (high end).
+   */
+  private _selectedColor(node: SkillNode): string {
+    if (node.proficiency === undefined) return this._theme.selectedColor
+    const t = (Math.min(5, Math.max(0, node.proficiency))) / 5
+    return interpolateColor(this._theme.selectedColorLow, this._theme.selectedColor, t)
+  }
+
+  /**
+   * Returns the proficiency-derived color for a node, or null if the
+   * theme's base color should be used unchanged.
+   */
+  private _proficiencyNodeColor(node: SkillNode): string | null {
+    const cfg = this._theme.proficiencyDisplay
+    if (node.proficiency === undefined) {
+      return cfg.unratedBehavior === 'distinct' ? cfg.unratedColor : null
+    }
+    if (node.proficiency === 0) return cfg.roadmapColor
+    // Clamp to [1, 5] and interpolate
+    const t = (Math.min(5, Math.max(1, node.proficiency)) - 1) / 4
+    return interpolateColor(cfg.gradient.from, cfg.gradient.to, t)
+  }
+
   // ─── Shapes ───────────────────────────────────────────────────────────────
 
   private _resolveStyle(node: SkillNode): NodeStyle {
@@ -497,7 +720,7 @@ export class CanvasRenderer {
         this._polygon(ctx, pos, size, 4, 0)
         break
       case 'star':
-        this._star(ctx, pos, size)
+        this._starPath(ctx, pos.x, pos.y, size)
         break
     }
   }
@@ -511,15 +734,16 @@ export class CanvasRenderer {
     ctx.closePath()
   }
 
-  private _star(ctx: CanvasRenderingContext2D, pos: Position, r: number): void {
+  /** 5-pointed star path centred at (x, y) with outer radius r. */
+  private _starPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
     const inner  = r * 0.4
     const points = 5
     for (let i = 0; i < points * 2; i++) {
       const angle  = (i * Math.PI) / points - Math.PI / 2
       const radius = i % 2 === 0 ? r : inner
-      const x = pos.x + radius * Math.cos(angle)
-      const y = pos.y + radius * Math.sin(angle)
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      const px = x + radius * Math.cos(angle)
+      const py = y + radius * Math.sin(angle)
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
     }
     ctx.closePath()
   }

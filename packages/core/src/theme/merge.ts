@@ -15,5 +15,15 @@ export function mergeTheme(overrides?: ThemeInput): Theme {
       unlocked: { ...defaultTheme.states.unlocked, ...overrides.states?.unlocked },
       highlighted: { ...defaultTheme.states.highlighted, ...overrides.states?.highlighted },
     },
+    selectedColor:    overrides.selectedColor    ?? defaultTheme.selectedColor,
+    selectedColorLow: overrides.selectedColorLow ?? defaultTheme.selectedColorLow,
+    proficiencyDisplay: {
+      ...defaultTheme.proficiencyDisplay,
+      ...overrides.proficiencyDisplay,
+      gradient: {
+        ...defaultTheme.proficiencyDisplay.gradient,
+        ...overrides.proficiencyDisplay?.gradient,
+      },
+    },
   }
 }
