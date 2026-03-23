@@ -1,6 +1,6 @@
 {
   "name": "@expertrees/core",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Framework-agnostic hierarchical knowledge graph engine — canvas renderer, force layout, and interaction controller",
   "license": "MIT",
   "type": "module",
