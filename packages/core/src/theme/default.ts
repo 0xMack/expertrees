@@ -44,4 +44,15 @@ export const defaultTheme: Theme = {
       glowRadius: 24,
     },
   },
+  selectedColor:    '#8B1A1A',  // dark red — high proficiency / unrated selected
+  selectedColorLow: '#d97706',  // amber — low proficiency selected
+  proficiencyDisplay: {
+    // Blue → purple gradient (matches the star-map aesthetic)
+    gradient: { from: '#9b5de5', to: '#4a9eff' },
+    // Dim slate-blue for roadmap skills (proficiency: 0)
+    roadmapColor: '#3a4a6b',
+    // By default, unrated nodes use the theme base color
+    unratedBehavior: 'default',
+    unratedColor: '#2a3550',
+  },
 }
